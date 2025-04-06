@@ -1,0 +1,78 @@
+\documentclass[a4paper,12pt]{article}
+
+% Encoding and language packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{csquotes}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+% Page margins
+\usepackage[margin=1in]{geometry}
+
+\title{Predicting Game Outcomes Using Machine Learning in Sports Analytics}
+\author{Emerson Hernandez \and Toufeeq Sharieff \and Mani Vutukuri \and Michael Nguyen}
+\date{April 6, 2025\\Professor: Professor Fang Yi Yu}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section*{Abstract}
+This project aims to predict the outcome of sports matches (win, loss, or draw) by analyzing historical game data. We build a machine learning pipeline that leverages key performance metrics to generate reliable predictions. This work is intended to provide actionable insights for coaches, enhance fan engagement, and support data-driven decision making.
+
+\section{Introduction}
+\subsection{Problem Statement}
+The goal of this project is to develop a predictive model that forecasts match outcomes by analyzing historical game data. By using features such as goals scored, possession percentages, and recent form, our model seeks to reliably predict whether a match will result in a win, loss, or draw.
+
+\subsection{Motivation}
+\begin{itemize}
+    \item \textbf{Strategic Insights:} Coaches and managers can adjust their game plans and predict opponents’ tactics.
+    \item \textbf{Fan Engagement:} Accurate predictions create a more engaging experience for fans, especially in fantasy leagues and sports betting.
+    \item \textbf{Data-Driven Decision Making:} Using machine learning provides objective insights, reducing guesswork.
+\end{itemize}
+
+\subsection{Proposed Methods}
+Our methodology involves the following steps:
+\begin{enumerate}
+    \item \textbf{Data Collection and Preprocessing:} Use a Kaggle-sourced dataset, clean and preprocess the data, and perform exploratory data analysis (EDA).
+    \item \textbf{Feature Engineering:} Create new features such as goal difference and rolling averages of performance metrics.
+    \item \textbf{Model Development:} Implement baseline models including Logistic Regression, Decision Trees, and K-Nearest Neighbors.
+    \item \textbf{Model Evaluation:} Evaluate models using accuracy, precision, recall, F1-score, and confusion matrices.
+\end{enumerate}
+
+\section{Related Work}
+\subsection{Key Studies}
+\begin{itemize}
+    \item \textbf{NBA Game Outcome Prediction:} Previous research has demonstrated that decision trees and logistic regression can predict outcomes with high accuracy by using features like field goal percentages and rebounds.
+    \item \textbf{Soccer Match Prediction:} Studies using historical match data (goals scored, possession, etc.) have shown significant predictive accuracy for soccer outcomes.
+\end{itemize}
+These studies underscore the potential of machine learning models in sports analytics and highlight the importance of careful feature selection and model tuning.
+
+\section{Data and Methodology}
+\subsection{Dataset Description}
+The dataset, obtained from Kaggle, contains historical match data with features such as goals scored, goals conceded, possession percentage, number of games won, and recent form. The target variable is the match outcome (win, loss, or draw).
+
+\subsection{Methodology}
+\begin{enumerate}
+    \item \textbf{Exploratory Data Analysis:} Summary statistics and visualizations (histograms, correlation matrices) to understand the data.
+    \item \textbf{Preprocessing:} Handling missing values, encoding categorical variables, and normalizing numerical features.
+    \item \textbf{Modeling:} Implementation of Logistic Regression, Decision Trees, and K-Nearest Neighbors. Hyperparameter tuning is performed to optimize model performance.
+    \item \textbf{Evaluation:} Models are evaluated using validation metrics and the best model is tested on a hold-out test set.
+\end{enumerate}
+
+\section{Results and Discussion}
+The best performing model is identified based on evaluation metrics such as accuracy and F1-score. A detailed analysis of feature importance and model performance is provided, highlighting the strengths and limitations of our approach.
+
+\section{Conclusion and Future Work}
+This project demonstrates the viability of using machine learning to predict sports match outcomes. Future work may include refining the model with additional features, exploring ensemble methods, and extending the analysis to different sports leagues.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
