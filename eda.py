@@ -2,27 +2,25 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Load the dataset using the correct encoding and delimiter
+# Load the dataset with appropriate encoding and delimiter
 data = pd.read_csv('2021-2022 Football Team Stats.csv', encoding='latin1', sep=';')
 
-# Print the first 5 rows
+# Display basic information
 print("First 5 rows:")
 print(data.head())
-
-# Print dataset info
 print("\nDataset Info:")
 print(data.info())
 
-# Print summary statistics for numeric columns
-print("\nSummary Statistics (Numeric Columns):")
+# Print summary statistics for numeric columns only
 numeric_data = data.select_dtypes(include=['int64', 'float64'])
+print("\nSummary Statistics (Numeric Columns):")
 print(numeric_data.describe())
 
-# Check for missing values in all columns
+# Check for missing values
 print("\nMissing values in each column:")
 print(data.isnull().sum())
 
-# Generate and save a histogram for a key numeric feature, e.g., 'GF' (Goals For)
+# Save a histogram for a key numeric feature, e.g., 'GF' (Goals For)
 if 'GF' in data.columns:
     plt.figure(figsize=(8, 6))
     sns.histplot(data['GF'], kde=True)
@@ -33,7 +31,7 @@ if 'GF' in data.columns:
     plt.close()
     print("\nSaved histogram for 'GF' as 'goals_for_histogram.png'.")
 
-# Generate and save a correlation matrix heatmap using numeric data only
+# Plot and save the correlation matrix using numeric columns only
 plt.figure(figsize=(10, 8))
 corr_matrix = numeric_data.corr()
 sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap='coolwarm')
