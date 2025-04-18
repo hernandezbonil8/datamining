@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# Match Prediction Script for Football Clubs
-# Student project: merges club & player data, builds logistic regression, and predicts head-to-head
 
 import os
 import pandas as pd

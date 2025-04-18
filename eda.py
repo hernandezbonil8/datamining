@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# Advanced Football Team Analysis (2021-2022 Season)
-# Student project: EDA, clustering, and simple regression model
 
 import os
 import pandas as pd

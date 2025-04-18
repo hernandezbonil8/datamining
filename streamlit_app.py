@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# Streamlit App: Head-to-Head Football Match Predictor
-# Student-authored, interactive UI with extra visualizations
 
 import os
 import pandas as pd
