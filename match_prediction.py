@@ -1,174 +1,190 @@
+#!/usr/bin/env python3
+# Match Prediction Script for Football Clubs
+# Student project: merges club & player data, builds logistic regression, and predicts head-to-head
+
+import os
 import pandas as pd
 import numpy as np
-import csv  # for quoting
+import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    roc_curve,
+    auc,
+    precision_recall_curve,
+    average_precision_score
+)
 import joblib
+import argparse
 
-# Define file paths (these files should reside in a folder called "data")
-CLUBS1_CSV = 'data/2021-2022 Football Team Stats.csv'
-CLUBS2_CSV = 'data/Soccer_Football Clubs Ranking in june.csv'
-PLAYERS_CSV = 'data/players_15.csv'
+# file paths
+CLUBS1 = 'data/2021-2022 Football Team Stats.csv'
+CLUBS2 = 'data/Soccer_Football Clubs Ranking in june.csv'
+PLAYERS = 'data/players_15.csv'
+OUTPUT_DIR = 'match_output'
+MODEL_FILE = 'match_prediction_model.pkl'
 
-# ------------------------------
-# 1. Load Club-Level Datasets
-# ------------------------------
+# 1) load and clean club-level tables
+def load_club_data():
+    print('Loading club stats...')
+    df1 = pd.read_csv(CLUBS1, encoding='latin1', sep=';')
+    df1.columns = df1.columns.str.strip()
+    # rename squad to club
+    if 'Squad' in df1.columns:
+        df1.rename(columns={'Squad':'club'}, inplace=True)
+    elif 'Club' in df1.columns:
+        df1.rename(columns={'Club':'club'}, inplace=True)
 
-# Load clubs1_df from 2021-2022 Football Team Stats.csv (assumed semicolon-separated)
-clubs1_df = pd.read_csv(CLUBS1_CSV, encoding='latin1', sep=';')
+    print('Loading club rankings...')
+    df2 = pd.read_csv(CLUBS2, encoding='latin1', sep=',', engine='python')
+    df2.columns = df2.columns.str.strip().str.replace('\r','')
+    # rename possible columns to club
+    for c in ['club name','Team','Club']:
+        if c in df2.columns:
+            df2.rename(columns={c:'club'}, inplace=True)
+            break
 
-# Load clubs2_df from Soccer_Football Clubs Ranking in june.csv using comma as the delimiter
-clubs2_df = pd.read_csv(CLUBS2_CSV, encoding='latin1', sep=',', engine='python')
+    merged = pd.merge(df1, df2, on='club', how='inner')
+    print(f'Merged club data: {merged.shape[0]} rows, {merged.shape[1]} columns')
+    return merged
 
-# Debug print: show clubs2_df columns
-print("clubs2_df columns:", clubs2_df.columns.tolist())
+# 2) load and aggregate player ratings
+def load_player_data():
+    print('Loading player data...')
+    df = pd.read_csv(PLAYERS, encoding='latin1')
+    df.columns = df.columns.str.strip()
+    if 'club' not in df.columns:
+        raise ValueError('players_15.csv missing club column')
+    agg = df.groupby('club')[['overall','potential']].mean().reset_index()
+    agg.rename(columns={'overall':'avg_overall','potential':'avg_potential'}, inplace=True)
+    print(f'Aggregated player ratings: {agg.shape[0]} clubs')
+    return agg
 
-# Strip extra whitespace from column names
-clubs1_df.columns = clubs1_df.columns.str.strip()
-clubs2_df.columns = clubs2_df.columns.str.strip()
+# 3) merge all into one df
+def merge_all():
+    clubs = load_club_data()
+    players = load_player_data()
+    df = pd.merge(clubs, players, on='club', how='inner')
+    # ensure a points column exists
+    if 'point score' not in df.columns and 'Pts' in df.columns:
+        df.rename(columns={'Pts':'point score'}, inplace=True)
+    print(f'Final merged dataset: {df.shape[0]} rows, {df.shape[1]} columns')
+    return df
 
-# Standardize the club name columns:
-# For clubs1_df, assume the club name is in the column "Squad" – rename it to "club"
-if 'Squad' in clubs1_df.columns:
-    clubs1_df.rename(columns={'Squad': 'club'}, inplace=True)
-elif 'Club' in clubs1_df.columns:
-    clubs1_df.rename(columns={'Club': 'club'}, inplace=True)
-else:
-    raise Exception("No appropriate club name column found in clubs1_df.")
+# 4) generate synthetic head-to-head dataset
+def make_synthetic(df, feature_cols, save_csv=False):
+    print('Creating synthetic match data...')
+    data = []
+    n = len(df)
+    for i in range(n):
+        for j in range(i+1, n):
+            v1 = df.iloc[i][feature_cols].values.astype(float)
+            v2 = df.iloc[j][feature_cols].values.astype(float)
+            label = int(df.iloc[i]['point score'] > df.iloc[j]['point score'])
+            data.append((v1-v2, label))
+            data.append((v2-v1, 1-label))
+    X = np.vstack([d[0] for d in data])
+    y = np.array([d[1] for d in data])
+    print(f'Synthetic data shape: {X.shape}, Labels: {y.shape}')
+    if save_csv:
+        syn_df = pd.DataFrame(X, columns=feature_cols)
+        syn_df['label'] = y
+        syn_df.to_csv(os.path.join(OUTPUT_DIR, 'synthetic_match_data.csv'), index=False)
+        print('Saved synthetic dataset to synthetic_match_data.csv')
+    return X, y
 
-# For clubs2_df, we check for "club name", "Team", or "Club" and rename to "club"
-if 'club name' in clubs2_df.columns:
-    clubs2_df.rename(columns={'club name': 'club'}, inplace=True)
-elif 'Team' in clubs2_df.columns:
-    clubs2_df.rename(columns={'Team': 'club'}, inplace=True)
-elif 'Club' in clubs2_df.columns:
-    clubs2_df.rename(columns={'Club': 'club'}, inplace=True)
-else:
-    raise Exception("No appropriate club name column found in clubs2_df.")
+# 5) train logistic regression model
+def train_model(X, y, feature_cols, cv_folds=5):
+    print('Training logistic regression...')
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1)
+    model = LogisticRegression(max_iter=1000)
+    # cross-validation
+    cv_scores = cross_val_score(model, X, y, cv=cv_folds)
+    print(f'CV Accuracy scores ({cv_folds}-fold): {cv_scores.round(3)}')
+    print(f'Mean CV accuracy: {cv_scores.mean():.3f}')
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    print(f'Test Accuracy: {acc:.3f}')
+    print('Confusion matrix:\n', confusion_matrix(y_test, y_pred))
+    print('Classification report:\n', classification_report(y_test, y_pred))
+    # ROC curve
+    probs = model.predict_proba(X_test)[:,1]
+    fpr, tpr, _ = roc_curve(y_test, probs)
+    roc_auc = auc(fpr, tpr)
+    plt.figure()
+    plt.plot(fpr, tpr, label=f'AUC = {roc_auc:.2f}')
+    plt.plot([0,1],[0,1],'k--')
+    plt.title('ROC Curve')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.legend()
+    plt.savefig(os.path.join(OUTPUT_DIR,'roc_curve.png'))
+    plt.close()
+    print(f'ROC AUC: {roc_auc:.3f}')
+    # Precision-Recall
+    precision, recall, _ = precision_recall_curve(y_test, probs)
+    ap = average_precision_score(y_test, probs)
+    plt.figure()
+    plt.plot(recall, precision, label=f'AP = {ap:.2f}')
+    plt.title('Precision-Recall Curve')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.legend()
+    plt.savefig(os.path.join(OUTPUT_DIR,'precision_recall_curve.png'))
+    plt.close()
+    print(f'Average Precision: {ap:.3f}')
+    # coefficients bar chart
+    coefs = pd.Series(model.coef_[0], index=feature_cols)
+    coefs.sort_values().plot(kind='barh')
+    plt.title('Feature Coefficients')
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_DIR,'feature_coefs.png'))
+    plt.close()
+    # save model
+    joblib.dump(model, MODEL_FILE)
+    print(f'Model saved to {MODEL_FILE}')
+    return model
 
-# Merge the two club datasets on the "club" column
-clubs_merged = pd.merge(clubs1_df, clubs2_df, on='club', how='inner', suffixes=('_stats', '_rank'))
+# 6) predict head-to-head match outcome
+def predict_match(model, df, feature_cols, c1, c2):
+    print(f'Predicting: {c1} vs {c2}')
+    r1 = df[df['club']==c1]
+    r2 = df[df['club']==c2]
+    if r1.empty or r2.empty:
+        print('Club name not found!')
+        return
+    diff = r1.iloc[0][feature_cols].values.astype(float) - r2.iloc[0][feature_cols].values.astype(float)
+    prob = model.predict_proba([diff])[0][1]
+    winner = c1 if prob>0.5 else c2
+    print(f'{winner} wins with probability {max(prob,1-prob):.2f}')
+    return winner, max(prob,1-prob)
 
-# -------------------------------------
-# 2. Load Player-Level Dataset and Aggregate
-# -------------------------------------
-players_df = pd.read_csv(PLAYERS_CSV, encoding='latin1')
-players_df.columns = players_df.columns.str.strip()
+# 7) Command-line interface
+def main():
+    parser = argparse.ArgumentParser(description='Football Club Head-to-Head Predictor')
+    parser.add_argument('--save-synthetic', action='store_true', help='Save synthetic match dataset to CSV')
+    parser.add_argument('--club1', type=str, help='Name of club 1 to predict')
+    parser.add_argument('--club2', type=str, help='Name of club 2 to predict')
+    args = parser.parse_args()
 
-# IMPORTANT: Adjust these column names to match your players dataset.
-# In this code, we assume players_15.csv uses 'overall' and 'potential'.
-if 'overall' not in players_df.columns or 'potential' not in players_df.columns:
-    raise Exception("Expected columns 'overall' and 'potential' not found in players dataset. Please verify your file.")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    df = merge_all()
+    feature_cols = ['point score','avg_overall','avg_potential']
+    X, y = make_synthetic(df, feature_cols, save_csv=args.save_synthetic)
+    model = train_model(X, y, feature_cols)
 
-agg_players = players_df.groupby('club').agg({
-    'overall': 'mean',
-    'potential': 'mean'
-}).reset_index()
-agg_players.rename(columns={
-    'overall': 'avg_overall_rating',
-    'potential': 'avg_potential'
-}, inplace=True)
-
-# Merge aggregated player data with the club-level merged data
-merged_df = pd.merge(clubs_merged, agg_players, on='club', how='inner')
-
-# --------------------------
-# 3. Define Performance Metric
-# --------------------------
-# We'll use "point score" as our performance metric. Check if it exists.
-if 'point score' not in merged_df.columns:
-    print("Column 'point score' not found. Attempting to use 'Pts' instead.")
-    if 'Pts' in merged_df.columns:
-        merged_df.rename(columns={'Pts': 'point score'}, inplace=True)
+    if args.club1 and args.club2:
+        predict_match(model, df, feature_cols, args.club1, args.club2)
     else:
-        raise Exception("No column for team points found. Please verify your datasets.")
+        # example default
+        clubs = df['club'].tolist()
+        if len(clubs)>=2:
+            predict_match(model, df, feature_cols, clubs[0], clubs[1])
+    print('Done! All outputs are in', OUTPUT_DIR)
 
-# --------------------------
-# 4. Define Feature Columns
-# --------------------------
-# We'll use the club-level point score, average overall rating, and average potential.
-feature_cols = ['point score', 'avg_overall_rating', 'avg_potential']
-
-# =============================================================================
-# 5. Create Synthetic Match-Level Dataset
-# For every pair of clubs (i, j), create a training example:
-#   - Input: difference between their feature vectors (club_i - club_j).
-#   - Label: 1 if club_i's point score > club_j's, else 0.
-# Also create the reverse matchup (club_j - club_i) with the opposite label.
-# =============================================================================
-synthetic_data = []
-num_clubs = merged_df.shape[0]
-
-for i in range(num_clubs):
-    for j in range(i + 1, num_clubs):
-        team_i_features = merged_df.loc[i, feature_cols].values.astype(float)
-        team_j_features = merged_df.loc[j, feature_cols].values.astype(float)
-        
-        # Create example: club_i minus club_j
-        diff_features = team_i_features - team_j_features
-        label = 1 if merged_df.loc[i, 'point score'] > merged_df.loc[j, 'point score'] else 0
-        synthetic_data.append((diff_features, label))
-        
-        # Also create inverse example: club_j minus club_i
-        diff_features_rev = team_j_features - team_i_features
-        label_rev = 1 - label
-        synthetic_data.append((diff_features_rev, label_rev))
-
-X_synthetic = np.array([x for x, y in synthetic_data])
-y_synthetic = np.array([y for x, y in synthetic_data])
-print("Synthetic dataset shape:", X_synthetic.shape)
-
-# -----------------------------------------------------------
-# 6. Split Data and Train a Logistic Regression Model
-# -----------------------------------------------------------
-X_train, X_test, y_train, y_test = train_test_split(X_synthetic, y_synthetic, test_size=0.2, random_state=42)
-
-match_model = LogisticRegression(max_iter=1000)
-match_model.fit(X_train, y_train)
-
-y_pred = match_model.predict(X_test)
-print("Synthetic Test Accuracy:", accuracy_score(y_test, y_pred))
-print("Classification Report:\n", classification_report(y_test, y_pred))
-print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
-
-# Save the trained model to disk
-joblib.dump(match_model, 'match_prediction_model.pkl')
-print("Match prediction model saved as 'match_prediction_model.pkl'.")
-
-# =============================================================================
-# 7. Function for Predicting Head-to-Head Match Outcome
-# =============================================================================
-def predict_match(club1, club2):
-    """
-    Given two club names, predict which club is more likely to win based on the difference
-    in their feature vectors.
-    """
-    row1 = merged_df[merged_df['club'] == club1]
-    row2 = merged_df[merged_df['club'] == club2]
-    
-    if row1.empty or row2.empty:
-        raise Exception("One or both club names not found in the merged dataset.")
-    
-    team1_features = row1.iloc[0][feature_cols].values.astype(float)
-    team2_features = row2.iloc[0][feature_cols].values.astype(float)
-    
-    diff = team1_features - team2_features
-    prob = match_model.predict_proba([diff])[0][1]
-    print(f"Predicted probability that {club1} wins over {club2}: {prob:.2f}")
-    if prob > 0.5:
-        print(f"{club1} is predicted to win against {club2}.")
-        return club1, prob
-    else:
-        print(f"{club2} is predicted to win against {club1}.")
-        return club2, 1 - prob
-
-# Example usage: Predict outcome between the first two clubs in merged_df
-if merged_df.shape[0] >= 2:
-    club_a = merged_df['club'].iloc[0]
-    club_b = merged_df['club'].iloc[1]
-    print("\nExample Match Prediction:")
-    winner, win_prob = predict_match(club_a, club_b)
-    print(f"Result: {winner} is predicted to win with probability {win_prob:.2f}")
-else:
-    print("Not enough clubs in the dataset for a match prediction.")
+if __name__ == '__main__':
+    main()
