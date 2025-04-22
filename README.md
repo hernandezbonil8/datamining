@@ -1,4 +1,4 @@
-⚽ Football Match Outcome Prediction
+Football Match Outcome Prediction
 
 Welcome to our football match prediction project! This repo walks through analyzing team-level stats from the 2021–2022 season and using that data to build a model that predicts whether a team will win. We also included a Streamlit web app so you can easily interact with the model and try out predictions yourself.
 
@@ -19,8 +19,7 @@ File/Folder                 Purpose
  `match_prediction.py`      Allows you to test the model manually on team matchups                 
  `match_prediction_model.pkl`  Trained model file (used for predictions)                          
  `streamlit_app.py`         The Streamlit interface to run predictions in a web browser            
- `requirements.txt`         Python package dependencies                                             
- `final_report.tex`         (Optional) LaTeX file used to generate our final write-up/report       
+ `requirements.txt`         Python package dependencies                                                  
 
 
  Setup Instructions
@@ -57,7 +56,7 @@ This will:
  3. Make Manual Predictions (`match_prediction.py`)
 
 
-python match_prediction.py --save-synthetic
+python match_prediction.py 
 
 
 This script:
