@@ -46,7 +46,6 @@ Output is printed in the terminal and the plot is shown using Seaborn/Matplotlib
 
  2. Train the Model (`model_training.py`)
 
-python model_training.py
 
 
 This will:
@@ -75,5 +74,8 @@ Result: Manchester City is predicted to win
 
 
 streamlit run streamlit_app.py
+or 
+python3 -m streamlit run streamlit_app.py
+
 
 

@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 import numpy as np
@@ -157,7 +156,9 @@ def train_model(df, out_dir='output'):
     model = LinearRegression().fit(X_train, y_train)
     preds = model.predict(X_test)
     r2 = r2_score(y_test, preds)
-    rmse = mean_squared_error(y_test, preds, squared=False)
+    # compute RMSE manually instead of using squared=False
+    mse  = mean_squared_error(y_test, preds)
+    rmse = mse ** 0.5
     print(f"R2={r2:.3f}, RMSE={rmse:.3f}")
     plt.figure()
     plt.scatter(y_test, preds)
